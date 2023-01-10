@@ -12,19 +12,19 @@ typedef struct {
     void **pcq_buffer;
     size_t pcq_capacity;
 
-    pthread_mutex_t pcq_current_size_lock;
+    pthread_mutex_t pcq_current_size_lock;  // para alterar o tamanho
     size_t pcq_current_size;
 
-    pthread_mutex_t pcq_head_lock;
+    pthread_mutex_t pcq_head_lock;  // lock para dar swap a head quando e removida
     size_t pcq_head;
 
-    pthread_mutex_t pcq_tail_lock;
+    pthread_mutex_t pcq_tail_lock;  // se duas sao recebidas ao mesmo tempo uma delas vai ser a tail precisamos de lock
     size_t pcq_tail;
 
-    pthread_mutex_t pcq_pusher_condvar_lock;
+    pthread_mutex_t pcq_pusher_condvar_lock;    //para dar push para o buffer  
     pthread_cond_t pcq_pusher_condvar;
 
-    pthread_mutex_t pcq_popper_condvar_lock;
+    pthread_mutex_t pcq_popper_condvar_lock;   // para dar pop do buffer 
     pthread_cond_t pcq_popper_condvar;
 } pc_queue_t;
 
