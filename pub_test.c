@@ -4,19 +4,20 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
-#define FIFO_PATHNAME "regist"
 #define BUFFER_SIZE (128)
 
-int main() {
+int main(int argc, char **argv) {
     // Open pipe for reading
     // This waits for someone to open it for writing
-    int rx = open(FIFO_PATHNAME, O_RDONLY);
+    
+    int rx = open(argv[1], O_RDONLY);
     if (rx == -1) {
         fprintf(stderr, "[ERR]: open failed: %s\n", strerror(errno));
         exit(EXIT_FAILURE);

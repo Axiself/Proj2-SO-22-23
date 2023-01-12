@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -13,6 +14,8 @@
 #include "producer-consumer.h"
 #include "logging.h"
 
+
+#define BUFFER_SIZE (sizeof(uint8_t) + (sizeof(char) * 288))
 /*
 int create_mbroker(char * register_pipe_name, size_t max_sessions) {
     pc_queue_t * queue = malloc(sizeof(pc_queue_t));
@@ -75,7 +78,16 @@ void writeToPipe(mbroker d) {
     close(tx);
 }*/
 
-int mbroker(char * register_name, size_t size) {
+void process_buffer_data(char *buffer) {
+    printf("Buffer -> %d\n", buffer[0]);
+    printf("Buffer -> %s\n", buffer+sizeof(uint8_t));
+    printf("Buffer -> %s\n", buffer+sizeof(uint8_t)+(sizeof(char) * 256));
+
+
+
+}
+
+void mbroker(char * register_name, size_t size) {
     
     // Remove pipe if it does not exist
     if (unlink(register_name) != 0 && errno != ENOENT) { 
@@ -88,21 +100,50 @@ int mbroker(char * register_name, size_t size) {
         fprintf(stderr, "[ERR]: mkfifo failed: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
     } 
+    
+    pc_queue_t * queue = malloc(sizeof(pc_queue_t));
+    pcq_create(queue, size);
 
     // loop to receive protocols and execute them
     // pipe stays open 
-    int tx = open(register_name,  O_RDONLY);
-    int rx = open(register_name, O_WRONLY);
+    int rx = open(register_name,  O_RDONLY);
+    int tx = open(register_name, O_WRONLY);
 
-    while (true) {
-        
+    if (tx == -1 || rx == -1) {
+        fprintf(stderr, "[ERR]: open failed: %s\n", strerror(errno));
+        exit(EXIT_FAILURE);
     }
+
+
+    while (true) {  // condition to maintain server open
+        char buffer[BUFFER_SIZE];
+        ssize_t ret = read(rx, buffer, BUFFER_SIZE - 1);
+        if (ret == 0) {
+            // ret == 0 indicates EOF
+            fprintf(stderr, "[INFO]: pipe closed\n");
+            break;
+        } else if (ret == -1) {
+            // ret == -1 indicates error
+            fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+        //printf("Buffer-> %s", buffer);
+        fprintf(stderr, "[INFO]: received %zd B\n", ret);
+        buffer[ret] = 0;
+
+        process_buffer_data(buffer);
+
+        //fputs(buffer, stdout);
+        //offset += BUFFER_SIZE - 1;
+    }
+
+    close(tx);
+    close(rx);
 
 }
 
 int main(int argc, char **argv) {
-    int leave = 0;
-    char str1[10];
+    
     printf("Number of args-> %d\n", argc);
     if (argc != 3) {
         printf("[Error]: mbroker <register_pipe_name> <max_sessions> \n");
