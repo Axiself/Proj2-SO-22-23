@@ -10,10 +10,12 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include "logging.h"
 
 #define BUFFER_SIZE (1024)
+#define BUFFER_MSG_SIZE (sizeof(uint8_t) + sizeof(char) * BUFFER_SIZE)
 
 int sub_pipe(char *pipe_name) { 
     // Remove pipe if it does not exist
@@ -31,27 +33,55 @@ int sub_pipe(char *pipe_name) {
     return 0;
 }
 
-int msg_receiver(char *pipe_name) {
+void sig_handler(int sig) { 
+
+    static int count = 0;
+    // UNSAFE: This handler uses non-async-signal-safe functions (printf(),
+    // exit();)
+    if (sig == SIGINT) {
+        // In some systems, after the handler call the signal gets reverted
+        // to SIG_DFL (the default action associated with the signal).
+        // So we set the signal handler back to our function after each trap.
+        //
+        if (signal(SIGINT, sig_handler) == SIG_ERR) {
+            exit(EXIT_FAILURE);
+        }
+        count++;
+        fprintf(stderr, "\nCaught SIGINT (%d)\n", count);
+        //write(stdout, "Caught SIGINT (%d)\n", count);
+        return; // Resume execution at point of interruption
+    }
+
+    // Must be SIGQUIT - print a message and terminate the process
+    fprintf(stderr, "Caught SIGQUIT - that's all folks!\n");
+    //write(stdout, "Caught SIGQUIT - that's all folks!\n", 36);
+    return;
+}
+
+void msg_receiver(char *pipe_name) {
     int rx = open(pipe_name, O_RDONLY);
     //off_t offset = 0;
+    void * buffer = malloc(BUFFER_MSG_SIZE);
     while (true) {
-        char buffer[BUFFER_SIZE];
-        ssize_t ret = read(rx, buffer, BUFFER_SIZE - 1);
-        if (ret == 0) {
-            // ret == 0 indicates EOF
-            fprintf(stderr, "[INFO]: pipe closed\n");
-            return 0;
-        } else if (ret == -1) {
+        memset(buffer, 0, BUFFER_MSG_SIZE);
+        ssize_t ret = read(rx, buffer, BUFFER_MSG_SIZE);
+        if (ret == -1) {
             // ret == -1 indicates error
+            free(buffer);
+            close(rx);
             fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
             exit(EXIT_FAILURE);
         }
-
-        fprintf(stderr, "[INFO]: received %zd B\n", ret);
-        buffer[ret] = 0;
-        fputs(buffer, stdout);
+        if (signal(SIGINT, sig_handler) == SIG_ERR) { 
+            exit(EXIT_FAILURE);
+        }
+        printf("Buffer received -> %s", (char*) buffer);
+        //fprintf(stderr, "[INFO]: received %zd B\n", ret);
+        //buffer[ret] = 0;
+        //fputs(buffer, stdout);
         //offset += BUFFER_SIZE - 1;
     }
+    free (buffer);
     close(rx);
 }
 
@@ -71,7 +101,7 @@ void sub_protocol(char *rpn, char *cpn, char *box) {
 
     memset(buffer, '\0', size);
     memset(buffer, code, sizeof(uint8_t));    
-    memcpy(ptr, cpn, strlen(rpn));
+    memcpy(ptr, cpn, strlen(cpn));
     memcpy(ptr2, box, strlen(box));
 
     ssize_t ret = write(tx, buffer, size);
@@ -79,8 +109,8 @@ void sub_protocol(char *rpn, char *cpn, char *box) {
         fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
-    printf("written-> %ld", ret);
 
+    free(buffer);
     close(tx);
 }
 

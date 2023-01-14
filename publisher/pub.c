@@ -33,18 +33,25 @@ int pub_pipe(char *pipe_name) {
 
 int msg_sender(char *pipe_name) { 
     int tx = open(pipe_name, O_WRONLY);
+    printf("Opening pipe to write\n");
+    
+    void *buf = malloc(sizeof(uint8_t) + sizeof(char)*1024);
     char buffer[BUFFER_SIZE];
     while (true) {
+        memset(buf, 0, sizeof(uint8_t) + sizeof(char)*1024);
         memset(buffer, 0, BUFFER_SIZE);
         printf("\n> ");
         char *str = fgets(buffer, BUFFER_SIZE, stdin);
-        printf("Buffer-> %s\n", str);
-        ssize_t ret = write(tx, str, BUFFER_SIZE);
+        char *ptr = buf + sizeof(uint8_t);
+        memset(buf, 9, sizeof(uint8_t));
+        memcpy(ptr, str, sizeof(char)*1024);
+        ssize_t ret = write(tx, buf, BUFFER_SIZE);
         if (ret < 0) { 
             fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));
             exit(EXIT_FAILURE);
         }
     }
+    free(buf);
     close(tx);
 }
 
@@ -64,7 +71,7 @@ void pub_protocol(char *rpn, char *cpn, char *box) {
 
     memset(buffer, '\0', size);
     memset(buffer, code, sizeof(uint8_t));    
-    memcpy(ptr, cpn, strlen(rpn));
+    memcpy(ptr, cpn, strlen(cpn));
     memcpy(ptr2, box, strlen(box));
 
     ssize_t ret = write(tx, buffer, size);
@@ -72,8 +79,8 @@ void pub_protocol(char *rpn, char *cpn, char *box) {
         fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
-    printf("written-> %ld", ret);
-
+    printf("written-> %ld\n", ret);
+    free(buffer);
     close(tx);
 }
 
@@ -82,6 +89,7 @@ void publisher(char *register_name, char *pipe_name, char *box_name) {
     if (pub_pipe(pipe_name) != 0) exit(EXIT_FAILURE);
 
     pub_protocol(register_name, pipe_name, box_name);
+    
     msg_sender(pipe_name);
 
 }

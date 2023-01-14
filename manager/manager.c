@@ -34,24 +34,30 @@ int man_pipe(char *pipe_name) {
 void answer_handler(char *pipe_name) { 
     int rx = open(pipe_name, O_RDONLY);
     //off_t offset = 0;
-    while (true) {
-        char buffer[BUFFER_SIZE];
-        ssize_t ret = read(rx, buffer, BUFFER_SIZE - 1);
-        if (ret == 0) {
-            // ret == 0 indicates EOF
-            fprintf(stderr, "[INFO]: pipe closed\n");
-            break;
-        } else if (ret == -1) {
-            // ret == -1 indicates error
-            fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
-            exit(EXIT_FAILURE);
-        }
-
-        fprintf(stderr, "[INFO]: received %zd B\n", ret);
-        buffer[ret] = 0;
-        fputs(buffer, stdout);
-        //offset += BUFFER_SIZE - 1;
+    
+    char buffer[BUFFER_SIZE];
+    ssize_t ret = read(rx, buffer, BUFFER_SIZE - 1);
+    if (ret == 0) {
+        // ret == 0 indicates EOF
+        //fprintf(stderr, "[INFO]: pipe closed\n");
+        
+        return;
+    } else if (ret == -1) {
+        // ret == -1 indicates error
+        fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+        exit(EXIT_FAILURE);
     }
+
+    //fprintf(stderr, "[INFO]: received %zd B\n", ret);
+    buffer[ret] = 0;
+    if (buffer[1] == 0)
+        fprintf(stdout, "OK\n");
+    else {
+        char * msg = buffer + sizeof(uint8_t) + sizeof(uint32_t);
+        printf("%s\n", msg );
+    }
+    //offset += BUFFER_SIZE - 1;
+
     close(rx);
 }
 
@@ -89,8 +95,6 @@ void man_protocol(uint8_t code, char *rpn, char *cpn, char *box) {
         fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
-    printf("written-> %ld", ret);
-
     close(tx);
 }
 
@@ -124,8 +128,10 @@ static void print_usage() {
 int main(int argc, char **argv) {
     if (argc == 5) {
         manager(argv[1], argv[2], argv[3], argv[4]);
+        return 0;
     } else if(argc == 4 && strcmp(argv[3], "list") == 0) {
         manager_list(argv[1], argv[2]);
+        return 0;
     } else {
         print_usage();
         //printf("[Error]: manager <register_pipe_name> <pipe_name> <type> <box_name> \n");
