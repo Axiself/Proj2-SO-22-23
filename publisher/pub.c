@@ -15,6 +15,8 @@
 
 #define BUFFER_SIZE (1024)
 
+int exit_flag = 0;
+
 int pub_pipe(char *pipe_name) { 
     // Remove pipe if it does not exist
     if (unlink(pipe_name) != 0 && errno != ENOENT) {
@@ -31,10 +33,39 @@ int pub_pipe(char *pipe_name) {
     return 0;
 }
 
-int msg_sender(char *pipe_name) { 
+void sig_handler(int sig) { 
+
+    static int count = 0;
+    // UNSAFE: This handler uses non-async-signal-safe functions (printf(),
+    // exit();)
+    if (sig == SIGINT) {
+        // In some systems, after the handler call the signal gets reverted
+        // to SIG_DFL (the default action associated with the signal).
+        // So we set the signal handler back to our function after each trap.
+        //
+        printf("Pussy9\n"); 
+        if (signal(SIGINT, sig_handler) == SIG_ERR) {
+            exit(EXIT_FAILURE);
+        }
+        printf("Pussy10\n"); 
+    
+        count++;
+        exit_flag = count;
+        printf("Pussy11\n"); 
+        //fprintf(stderr, "\nCaught SIGINT (%d)\n", count);
+        //write(stdout, "Caught SIGINT (%d)\n", count);
+        return; // Resume execution at point of interruption
+    }
+
+    // Must be SIGQUIT - print a message and terminate the process
+    //fprintf(stderr, "\nCaught SIGQUIT - that's all folks!\n");
+    //write(stdout, "Caught SIGQUIT - that's all folks!\n", 36);
+    return;
+}
+
+void msg_sender(char *pipe_name) { 
     int tx = open(pipe_name, O_WRONLY);
     printf("Opening pipe to write\n");
-    
     void *buf = malloc(sizeof(uint8_t) + sizeof(char)*1024);
     char buffer[BUFFER_SIZE];
     while (true) {
@@ -42,13 +73,19 @@ int msg_sender(char *pipe_name) {
         memset(buffer, 0, BUFFER_SIZE);
         printf("\n> ");
         char *str = fgets(buffer, BUFFER_SIZE, stdin);
+        if (exit_flag != 0) break;
         char *ptr = buf + sizeof(uint8_t);
         memset(buf, 9, sizeof(uint8_t));
         memcpy(ptr, str, sizeof(char)*1024);
         ssize_t ret = write(tx, buf, BUFFER_SIZE);
+
+        if (signal(SIGINT, sig_handler) == SIG_ERR) { 
+            exit(EXIT_FAILURE);
+        }
+
         if (ret < 0) { 
             fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));
-            exit(EXIT_FAILURE);
+            break;  
         }
     }
     free(buf);

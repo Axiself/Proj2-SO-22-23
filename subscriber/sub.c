@@ -70,7 +70,7 @@ void msg_receiver(char *pipe_name) {
             free(buffer);
             close(rx);
             fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
-            exit(EXIT_FAILURE);
+            break;
         }
         if (signal(SIGINT, sig_handler) == SIG_ERR) { 
             exit(EXIT_FAILURE);

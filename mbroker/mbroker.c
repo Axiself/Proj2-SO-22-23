@@ -63,6 +63,8 @@ void pub_connection(char *pipe, char *box) {
     int idx = tfs_open(box, TFS_O_APPEND);
     if (idx == -1) { 
         fprintf(stderr, "[ERR]: box does not exist.\n");
+        pub_flag = 0;
+        close(rx);
         return;
     }
     //off_t offset = 0;
@@ -95,6 +97,7 @@ void pub_connection(char *pipe, char *box) {
             exit(EXIT_FAILURE);
         }
     }
+    pub_flag = 0;
     close(rx);
 }
 
