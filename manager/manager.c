@@ -80,6 +80,8 @@ void man_protocol(uint8_t code, char *rpn, char *cpn, char *box) {
         memcpy(ptr, cpn, strlen(rpn));
         memcpy(ptr2, box, strlen(box));
 
+        printf("Sent -> %s\n", (char*)ptr2);
+
     } else {
         size = sizeof(uint8_t) + (sizeof(char) * 256);
         buffer = malloc(size);
@@ -91,6 +93,8 @@ void man_protocol(uint8_t code, char *rpn, char *cpn, char *box) {
     }  
 
     ssize_t ret = write(tx, buffer, size);
+    printf("Sent -> %s\n", (char*)buffer);
+    //printf("Sent -> %s\n", (char*)ptr);
     if (ret < 0) {
         fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));
         exit(EXIT_FAILURE);

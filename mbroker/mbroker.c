@@ -22,7 +22,7 @@
 
 typedef struct { 
     int pub_flag;
-    char *box_name;
+    char box_name[32];
 } Box;
 
 Box box_array[MAX_BOX_COUNT];
@@ -120,7 +120,7 @@ void sub_connection(char *pipe, char *box) {
             memset(buffer, (uint8_t)10, sizeof(uint8_t));
             memcpy(ptr, reader, sizeof(reader) - 1);
             printf("Buffer sent -> %s", (char*)buffer);
-             ssize_t ret = write(tx, buffer, BUFFER_MSG_SIZE);
+            ssize_t ret = write(tx, buffer, BUFFER_MSG_SIZE);
             if (ret == -1 && errno == EPIPE) { 
                 fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));
                 break;
@@ -151,15 +151,70 @@ void create_box(char *pipe, char *box) {
     
     if (idx == -1) {
         char *msg = "[ERR]: box creation failed\n";
-        memset(ptr, idx, sizeof(uint32_t));
+        memset(ptr, idx, sizeof(int32_t));
         memcpy(ptr2, msg, strlen(msg));
     } else {
         char *msg = "\0";
-        memset(ptr, 0, sizeof(uint32_t));
+        memset(ptr, 0, sizeof(int32_t));
         memcpy(ptr2, msg, strlen(msg));
     }
     
+    Box newBox;
+    strcpy(newBox.box_name, box);
+    newBox.pub_flag = 0;
+    for(int i = 0; i < MAX_BOX_COUNT; i++) {
+        if(box_array[i].box_name[0] == '\0') {
+            box_array[i] = newBox;
+            break;
+        } else if(i == MAX_BOX_COUNT-1) {
+            fprintf(stderr, "[ERR]: no more box space: %s\n", strerror(errno));
+            free(buffer);
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    int tx = open(pipe, O_WRONLY);
+  
+    ssize_t ret = write(tx, buffer, size);
+    if (ret < 0) { 
+        fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));
+        free(buffer);
+        exit(EXIT_FAILURE);
+    }
     
+    free(buffer);
+    close(tx);
+}
+
+void remove_box(char *pipe, char *box) {
+
+    size_t size = sizeof(uint8_t) + sizeof(uint32_t) + sizeof(char) * BUFFER_MSG_SIZE - 1;
+    void *buffer = malloc(size);
+    
+    memset(buffer, '\0', size);
+    memset(buffer, 6, sizeof(uint8_t));
+
+    void *ptr = buffer + sizeof(uint8_t);
+    void *ptr2 = buffer + sizeof(uint8_t) + sizeof(uint32_t);
+    int res = tfs_unlink(box);
+    if (res == -1) {
+        char *msg = "[ERR]: box removal failed\n";
+        memset(ptr, res, sizeof(int32_t));
+        memcpy(ptr2, msg, strlen(msg));
+    } else {
+        char *msg = "\0";
+        memset(ptr, 0, sizeof(int32_t));
+        memcpy(ptr2, msg, strlen(msg));
+
+        int i;
+        for(i = 0; i < MAX_BOX_COUNT; i++)
+            if(strcmp(box_array[i].box_name, box) == 0) {
+                memset(box_array[i].box_name, 0, 32);
+                break;
+            }
+    
+        
+    }
 
     int tx = open(pipe, O_WRONLY);
   
@@ -203,7 +258,7 @@ void process_buffer_data(char *buffer) {
         create_box(pipe_name, box_name);
         break;
     case 5: // remove box
-        /* code */
+        remove_box(pipe_name, box_name);
         break;
     case 7: // list boxes
         /* code */
@@ -258,7 +313,7 @@ void mbroker(char * register_name, size_t size) {
             exit(EXIT_FAILURE);
         }
         //printf("Buffer-> %s", buffer);
-        fprintf(stderr, "[INFO]: received %zd B\n", ret);
+        fprintf(stderr, "[INFO]: received %zd B, code %d\n", ret, buffer[0]);
         buffer[ret] = 0;
 
         process_buffer_data(buffer);
