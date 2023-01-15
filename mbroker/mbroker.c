@@ -21,9 +21,9 @@
 #define MAX_BOX_COUNT (64)
 
 typedef struct { 
-    int n_subs;
-    int pub_flag;
-    int box_size;
+    uint8_t n_subs;
+    uint8_t pub_flag;
+    uint8_t box_size;
     char box_name[32];
     char message[1024];
 } Box;
@@ -176,24 +176,18 @@ void sub_connection(char *pipe, char *box) {
 
 void create_box(char *pipe, char *box) {
     size_t size = sizeof(uint8_t) + sizeof(uint32_t) + sizeof(char) * BUFFER_MSG_SIZE - 1;
-    char buffer[1029];
-    char return_code[4];
-    char error_msg[1024];
+    char *buffer = malloc(size);
     
     memset(buffer, '\0', size);
-    memset(return_code, '\0', sizeof(uint32_t));
-    memset(error_msg, '\0', sizeof(char)*1024);
-
-    //void *ptr = buffer + sizeof(uint8_t);
-    //void *ptr2 = buffer + sizeof(uint8_t) + sizeof(uint32_t);
+    *((uint8_t*) buffer) = 4;
     
     int idx = tfs_open(box, TFS_O_CREAT);
     
     if (idx == -1) {
-        sprintf(error_msg, "%s", "[ERR]: box creation failed");
-        sprintf(return_code, "%d", -1);
+        *((int32_t*) &buffer[1]) = -1;
+        snprintf(&buffer[2], 1024, "%s", "[ERR]: box creation failed");
     } else {
-        sprintf(return_code, "%d", 0);
+        *((int32_t*) &buffer[1]) = 0;
     
         Box newBox;
         strcpy(newBox.box_name, box);
@@ -210,7 +204,6 @@ void create_box(char *pipe, char *box) {
             }
         }
     }
-    sprintf(buffer, "%d%s%s", 4, return_code, error_msg);
 
     int tx = open(pipe, O_WRONLY);
   
@@ -225,26 +218,19 @@ void create_box(char *pipe, char *box) {
 
 void remove_box(char *pipe, char *box) {
 
-    size_t size = sizeof(uint8_t) + sizeof(uint32_t) + sizeof(char) * BUFFER_MSG_SIZE - 1;    
-    char buffer[1029];
-    char return_code[4];
-    char error_msg[1024];
+    size_t size = sizeof(uint8_t) + sizeof(uint32_t) + sizeof(char) * BUFFER_MSG_SIZE - 1;  
+    char *buffer = malloc(size);
 
     memset(buffer, '\0', size);
-    memset(return_code, '\0', sizeof(uint32_t));
-    memset(error_msg, '\0', sizeof(char)*1024);
+    *((uint8_t*) buffer) = 6;
 
-    //void *ptr = buffer + sizeof(uint8_t);
-    //void *ptr2 = buffer + sizeof(uint8_t) + sizeof(uint32_t);
+
     int res = tfs_unlink(box);
     if (res == -1) {
-        sprintf(error_msg, "%s", "[ERR]: box removal failed");
-        sprintf(return_code, "%d", -1);
-        sprintf(buffer, "%d%s%s", 4, return_code, error_msg);
+        *((int32_t*) &buffer[1]) = -1;
+        snprintf(&buffer[2], 1024, "%s", "[ERR]: box removal failed");
     } else {
-
-        sprintf(return_code, "%d", 0);
-        sprintf(buffer, "%d%s%s", 4, return_code, error_msg);
+        *((int32_t*) &buffer[1]) = 0;
         
         int i = find_box(box);
         memset(box_array[i].box_name, 0, 32);
@@ -263,40 +249,26 @@ void remove_box(char *pipe, char *box) {
 }
 
 void list_answer_msg(int idx, Box box, int tx, int flag_empty) {
-    char *buffer;
     size_t size;
     uint8_t last = 0;
     if(flag_empty) {
         last = 1;
-        size = sizeof(uint8_t)*2 + sizeof(char)*32;
+        size = sizeof(uint8_t)*2 + sizeof(char)*32 + sizeof(char)*5;
     }
+    else size = sizeof(uint8_t)*2 + sizeof(char)*32 + sizeof(uint64_t)*3 + sizeof(char)*5;
+    char *buffer = malloc(size);
 
-    else size = sizeof(uint8_t)*2 + sizeof(char)*32 + sizeof(uint64_t)*3;
-    buffer = malloc(size);
-    char box_name[32];
-
-    memset(buffer, '\0', size);
-    memset(box_name, '\0', sizeof(char)*32);
-
-    memcpy(box_name, box.box_name, strlen(box.box_name));
     if((idx == MAX_BOX_COUNT-1 || box_array[idx+1].box_name[0] == '\0') && !flag_empty) last = 1;
 
-    sprintf(buffer, "%d%d%s", 8, last, box_name);
+    memset(buffer, '\0', size);
+    *((uint8_t*) buffer) = 8;
+    *((uint8_t*) &buffer[1]) = last;
+    snprintf(&buffer[2], 32, "%s", box.box_name);
     
     if(!flag_empty) {
-        char box_size[8];
-        char box_pub_flags[8];
-        char box_nsubs[8];
-        
-        memset(box_size, '\0', sizeof(uint64_t));
-        memset(box_pub_flags, '\0', sizeof(uint64_t));
-        memset(box_nsubs, '\0', sizeof(uint64_t));    
-        
-        sprintf(box_size, "%d", box.box_size);
-        sprintf(box_pub_flags, "%d", box.pub_flag);
-        sprintf(box_nsubs, "%d", box.n_subs);
-
-        sprintf(buffer, "%s%s%s%s", buffer, box_size, box_pub_flags, box_nsubs);
+        *((uint8_t*) &buffer[34]) = box.box_size;
+        *((uint8_t*) &buffer[42]) = box.pub_flag;
+        *((uint8_t*) &buffer[50]) = box.n_subs;
     }
  
     //printf("Buffer -> %s, should be 8%d%s%d%d%d\n", buffer, last, box.box_name, box.box_size, box.pub_flag, box.n_subs);

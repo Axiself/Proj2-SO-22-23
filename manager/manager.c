@@ -33,17 +33,22 @@ int man_pipe(char *pipe_name) {
 
 void list_boxes(char *buffer) {
 
+    uint8_t last;
     char box_name[32];
+    uint64_t box_size;
+    uint64_t n_pubs;
+    uint64_t n_subs;
+
+    memcpy(&last, buffer + 1, sizeof(uint8_t));
     memcpy(box_name, buffer + 2, sizeof(char)*32);
+    memcpy(&box_size, buffer + 34, sizeof(uint64_t));
+    memcpy(&n_pubs, buffer + 42, sizeof(uint64_t));
+    memcpy(&n_subs, buffer + 50, sizeof(uint64_t));
 
-
-    //uint64_t box_size = buffer[];
-
-    //uint64_t n_publishers = ;
-
-    //uint64_t n_subscribers = ;
-    printf("%s\n", box_name);
-    //printf("%s %zu %zu %zu\n", box_name , box_size, n_publishers, n_subscribers);
+    if(last == 1 && strcmp(box_name, "") == 0)
+        printf("NO BOXES FOUND\n");
+    else
+        printf("%s %zu %zu %zu\n", box_name, box_size, n_pubs, n_subs);
 }
 
 void answer_handler(char *pipe_name) { 
@@ -65,24 +70,16 @@ void answer_handler(char *pipe_name) {
             exit(EXIT_FAILURE);
         }
 
-        //fprintf(stderr, "[INFO]: received %zd B\n", ret);
-        //buffer[ret] = 0;
-        char *msg;
-        //printf("Buffer -> %c\n", buffer[0]);
         switch (buffer[0])
         {
-        case '4':
-        case '6':
+        case 4:
+        case 6:
             if (buffer[1] == 0) fprintf(stdout, "OK\n");
             else {
-                msg = buffer + sizeof(uint8_t) + sizeof(uint32_t);
-                printf("%s\n", msg );
+                printf("%s\n", &buffer[2]);
             }
             break;
-        case '8':
-            //printf("Buffer received -> %s\n", buffer);
-            //printf("Last bit -> %c\n", buffer[1]);
-            //printf("whats this -> %c\n", buffer[0]);
+        case 8:
             list_boxes(buffer);
             break;
         default: //Pointless 
