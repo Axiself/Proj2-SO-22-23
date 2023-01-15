@@ -77,7 +77,7 @@ int pcq_enqueue(pc_queue_t *queue, void *elem) {
     // pcq_head points to the next space that is either empty or occupied
     pthread_mutex_lock(&queue->pcq_head_lock);
     queue->pcq_buffer[queue->pcq_head] = elem;
-    queue->pcq_head = (queue->pcq_head + 1) % queue->pcq_capacity; //! ??????
+    queue->pcq_head = (queue->pcq_head + 1) % queue->pcq_capacity;
     pthread_mutex_unlock(&queue->pcq_head_lock);
 
     // pcq_current_size increments with each addition
@@ -102,7 +102,7 @@ void *pcq_dequeue(pc_queue_t *queue) {
     pthread_mutex_lock(&queue->pcq_tail_lock);
     void *elem = queue->pcq_buffer[queue->pcq_tail];
     queue->pcq_buffer[queue->pcq_tail] = NULL;
-    queue->pcq_tail = (queue->pcq_tail - 1) % queue->pcq_capacity; //! same thing as earlier ?????
+    queue->pcq_tail = (queue->pcq_tail - 1) % queue->pcq_capacity;
     pthread_mutex_unlock(&queue->pcq_tail_lock);
     
     // pcq_current_size decrements with each removal

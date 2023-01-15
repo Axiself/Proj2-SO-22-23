@@ -69,8 +69,8 @@ void msg_sender(char *pipe_name) {
     void *buf = malloc(sizeof(uint8_t) + sizeof(char)*1024);
     char buffer[BUFFER_SIZE];
     while (true) {
-        memset(buf, 0, sizeof(uint8_t) + sizeof(char)*1024);
-        memset(buffer, 0, BUFFER_SIZE);
+        memset(buf, '\0', sizeof(uint8_t) + sizeof(char)*1024);
+        memset(buffer, '\0', BUFFER_SIZE);
         printf("\n> ");
         char *str = fgets(buffer, BUFFER_SIZE, stdin);
         if (exit_flag != 0) break;

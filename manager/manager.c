@@ -31,33 +31,63 @@ int man_pipe(char *pipe_name) {
     return 0;
 }
 
+void list_boxes(void *buffer) {
+
+    char box_name[32];
+    memcpy(box_name, buffer+sizeof(uint8_t)*2, sizeof(char)*32);
+    uint64_t box_size = (uint64_t)(buffer+sizeof(uint8_t)*2 + sizeof(char)*32);
+
+    uint64_t n_publishers = (uint64_t)(buffer+sizeof(uint8_t)*2 + sizeof(char)*32 + sizeof(uint64_t));
+
+    uint64_t n_subscribers = (uint64_t)(buffer+sizeof(uint8_t)*2 + sizeof(char)*32 + sizeof(uint64_t)*2);
+
+    printf("%s %zu %zu %zu\n", box_name, box_size, n_publishers, n_subscribers);
+}
+
 void answer_handler(char *pipe_name) { 
     int rx = open(pipe_name, O_RDONLY);
     //off_t offset = 0;
     
     char buffer[BUFFER_SIZE];
-    ssize_t ret = read(rx, buffer, BUFFER_SIZE - 1);
-    if (ret == 0) {
-        // ret == 0 indicates EOF
-        //fprintf(stderr, "[INFO]: pipe closed\n");
-        
-        return;
-    } else if (ret == -1) {
-        // ret == -1 indicates error
-        fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
-        exit(EXIT_FAILURE);
-    }
+    while (true) {
+        memset(buffer, '\0', BUFFER_SIZE);
+        ssize_t ret = read(rx, buffer, BUFFER_SIZE - 1);
+        if (ret == 0) {
+            // ret == 0 indicates EOF
+            //fprintf(stderr, "[INFO]: pipe closed\n");
+            
+            return;
+        } else if (ret == -1) {
+            // ret == -1 indicates error
+            fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
 
-    //fprintf(stderr, "[INFO]: received %zd B\n", ret);
-    buffer[ret] = 0;
-    if (buffer[1] == 0)
-        fprintf(stdout, "OK\n");
-    else {
-        char * msg = buffer + sizeof(uint8_t) + sizeof(uint32_t);
-        printf("%s\n", msg );
+        //fprintf(stderr, "[INFO]: received %zd B\n", ret);
+        //buffer[ret] = 0;
+        char *msg;
+        printf("Buffer -> %c\n", buffer[0]);
+        switch (buffer[0])
+        {
+        case '4':
+        case '6':
+            if (buffer[1] == 0) fprintf(stdout, "OK\n");
+            else {
+                msg = buffer + sizeof(uint8_t) + sizeof(uint32_t);
+                printf("%s\n", msg );
+            }
+            break;
+        case '8':
+            printf("Buffer received -> %s\n", buffer);
+            printf("Last bit -> %c\n", buffer[1]);
+            printf("whats this -> %c\n", buffer[0]);
+            list_boxes(buffer);
+            break;
+        default: //Pointless 
+            break;
+        }
+        //offset += BUFFER_SIZE - 1;
     }
-    //offset += BUFFER_SIZE - 1;
-
     close(rx);
 }
 

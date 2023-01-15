@@ -21,7 +21,9 @@
 #define MAX_BOX_COUNT (64)
 
 typedef struct { 
+    int n_subs;
     int pub_flag;
+    int box_size;
     char box_name[32];
 } Box;
 
@@ -58,6 +60,13 @@ size_t get_size_of_msg(char *buffer) {
     return size;
 }
 
+int find_box(char *box_name) {
+    for(int i = 0; i < MAX_BOX_COUNT; i++)
+        if(strcmp(box_array[i].box_name, box_name) == 0) 
+            return i;
+    return -1;
+}
+
 //. guarda o tx do subscriber e vai rodando
 
 void pub_connection(char *pipe, char *box) { 
@@ -65,7 +74,7 @@ void pub_connection(char *pipe, char *box) {
     int idx = tfs_open(box, TFS_O_APPEND);
     if (idx == -1) { 
         fprintf(stderr, "[ERR]: box does not exist.\n");
-        box_array[idx].pub_flag = 0;
+        tfs_close(idx);
         close(rx);
         return;
     }
@@ -73,7 +82,7 @@ void pub_connection(char *pipe, char *box) {
     char buffer[BUFFER_MSG_SIZE];
     while (true) {
         
-        memset(buffer, 0, BUFFER_MSG_SIZE);
+        memset(buffer, '\0', BUFFER_MSG_SIZE);
         ssize_t ret = read(rx, buffer, BUFFER_MSG_SIZE - 1);
         
         if (buffer[0] == 9) {
@@ -92,6 +101,7 @@ void pub_connection(char *pipe, char *box) {
         if (ret == 0) {
             // ret == 0 indicates EOF
             fprintf(stderr, "[INFO]: pipe closed\n");
+            tfs_close(idx);
             break;
         } else if (ret == -1) {
             // ret == -1 indicates error
@@ -100,6 +110,7 @@ void pub_connection(char *pipe, char *box) {
         }
     }
     box_array[idx].pub_flag = 0;
+    tfs_close(idx);
     close(rx);
 }
 
@@ -110,10 +121,14 @@ void sub_connection(char *pipe, char *box) {
         fprintf(stderr, "[ERR]: box does not exist.\n");
         return;
     }
+    tfs_close(idx);
     idx = tfs_open(box, TFS_O_CREAT);
     char reader[1024];
     void *buffer = malloc(BUFFER_MSG_SIZE);
     void *ptr = buffer + sizeof(uint8_t);
+
+    int i = find_box(box);
+    box_array[i].n_subs++;
     
     while (true) {
         
@@ -121,7 +136,7 @@ void sub_connection(char *pipe, char *box) {
         if (read > 0) {
 
             printf("Elements read -> %ld\n", read);
-            memset(buffer, 0, BUFFER_MSG_SIZE);
+            memset(buffer, '\0', BUFFER_MSG_SIZE);
             memset(buffer, (uint8_t)10, sizeof(uint8_t));
             memcpy(ptr, reader, sizeof(reader) - 1);
             printf("Buffer sent -> %s", (char*)buffer);
@@ -133,93 +148,94 @@ void sub_connection(char *pipe, char *box) {
             else if (ret == 0) {
                 // ret == 0 indicates EOF
                 fprintf(stderr, "[INFO]: pipe closed\n");
+                i = find_box(box);
+                box_array[i].n_subs--;
+                tfs_close(idx);
                 break;
             }
         }
         
     }
+    tfs_close(idx);
     free(buffer);
     close(tx);
 }
 
 void create_box(char *pipe, char *box) {
     size_t size = sizeof(uint8_t) + sizeof(uint32_t) + sizeof(char) * BUFFER_MSG_SIZE - 1;
-    void *buffer = malloc(size);
+    char buffer[1029];
+    char return_code[4];
+    char error_msg[1024];
     
     memset(buffer, '\0', size);
-    memset(buffer, 4, sizeof(uint8_t));
+    memset(return_code, '\0', sizeof(uint32_t));
+    memset(error_msg, '\0', sizeof(char)*1024);
 
-    void *ptr = buffer + sizeof(uint8_t);
-    void *ptr2 = buffer + sizeof(uint8_t) + sizeof(uint32_t);
+    //void *ptr = buffer + sizeof(uint8_t);
+    //void *ptr2 = buffer + sizeof(uint8_t) + sizeof(uint32_t);
     
     int idx = tfs_open(box, TFS_O_CREAT);
     
     if (idx == -1) {
-        char *msg = "[ERR]: box creation failed\n";
-        memset(ptr, idx, sizeof(int32_t));
-        memcpy(ptr2, msg, strlen(msg));
+        sprintf(error_msg, "%s", "[ERR]: box creation failed");
+        sprintf(return_code, "%d", -1);
     } else {
-        char *msg = "\0";
-        memset(ptr, 0, sizeof(int32_t));
-        memcpy(ptr2, msg, strlen(msg));
-    }
+        sprintf(return_code, "%d", 0);
     
-    Box newBox;
-    strcpy(newBox.box_name, box);
-    newBox.pub_flag = 0;
-    for(int i = 0; i < MAX_BOX_COUNT; i++) {
-        if(box_array[i].box_name[0] == '\0') {
-            box_array[i] = newBox;
-            break;
-        } else if(i == MAX_BOX_COUNT-1) {
-            fprintf(stderr, "[ERR]: no more box space: %s\n", strerror(errno));
-            free(buffer);
-            exit(EXIT_FAILURE);
+        Box newBox;
+        strcpy(newBox.box_name, box);
+        newBox.pub_flag = 0;
+        newBox.box_size = 0;
+        newBox.n_subs = 0;
+        for(int i = 0; i < MAX_BOX_COUNT; i++) {
+            if(box_array[i].box_name[0] == '\0') {
+                box_array[i] = newBox;
+                break;
+            } else if(i == MAX_BOX_COUNT-1) {
+                fprintf(stderr, "[ERR]: no more box space: %s\n", strerror(errno));
+                exit(EXIT_FAILURE);
+            }
         }
     }
+    sprintf(buffer, "%d%s%s", 4, return_code, error_msg);
 
     int tx = open(pipe, O_WRONLY);
   
     ssize_t ret = write(tx, buffer, size);
     if (ret < 0) { 
         fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));
-        free(buffer);
         exit(EXIT_FAILURE);
     }
-    
-    free(buffer);
+    tfs_close(idx);
     close(tx);
 }
 
 void remove_box(char *pipe, char *box) {
 
-    size_t size = sizeof(uint8_t) + sizeof(uint32_t) + sizeof(char) * BUFFER_MSG_SIZE - 1;
-    void *buffer = malloc(size);
-    
-    memset(buffer, '\0', size);
-    memset(buffer, 6, sizeof(uint8_t));
+    size_t size = sizeof(uint8_t) + sizeof(uint32_t) + sizeof(char) * BUFFER_MSG_SIZE - 1;    
+    char buffer[1029];
+    char return_code[4];
+    char error_msg[1024];
 
-    void *ptr = buffer + sizeof(uint8_t);
-    void *ptr2 = buffer + sizeof(uint8_t) + sizeof(uint32_t);
+    memset(buffer, '\0', size);
+    memset(return_code, '\0', sizeof(uint32_t));
+    memset(error_msg, '\0', sizeof(char)*1024);
+
+    //void *ptr = buffer + sizeof(uint8_t);
+    //void *ptr2 = buffer + sizeof(uint8_t) + sizeof(uint32_t);
     int res = tfs_unlink(box);
     if (res == -1) {
-        char *msg = "[ERR]: box removal failed\n";
-        memset(ptr, res, sizeof(int32_t));
-        memcpy(ptr2, msg, strlen(msg));
+        sprintf(error_msg, "%s", "[ERR]: box removal failed");
+        sprintf(return_code, "%d", -1);
+        sprintf(buffer, "%d%s%s", 4, return_code, error_msg);
     } else {
-        char *msg = "\0";
-        memset(ptr, 0, sizeof(int32_t));
-        memcpy(ptr2, msg, strlen(msg));
 
+        sprintf(return_code, "%d", 0);
+        sprintf(buffer, "%d%s%s", 4, return_code, error_msg);
         
-        for(int i = 0; i < MAX_BOX_COUNT; i++)
-            if(strcmp(box_array[i].box_name, box) == 0) {
-                memset(box_array[i].box_name, 0, 32);
-                box_array[i].pub_flag = 0;
-                break;
-            }
-    
-        
+        int i = find_box(box);
+        memset(box_array[i].box_name, 0, 32);
+        box_array[i].pub_flag = 0;
     }
 
     int tx = open(pipe, O_WRONLY);
@@ -227,25 +243,72 @@ void remove_box(char *pipe, char *box) {
     ssize_t ret = write(tx, buffer, size);
     if (ret < 0) { 
         fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));
-        free(buffer);
         exit(EXIT_FAILURE);
     }
     
-    free(buffer);
     close(tx);
 }
 
-void list_box(char *pipe) { 
-    printf("Work to do");
-} 
-
-int get_box_idx(char *box) { 
-    for (int i = 0; i < MAX_BOX_COUNT; i++) { 
-        if (strcmp(box_array[i].box_name, box) == 0)
-            return i;
+void list_answer_msg(int idx, Box box, int tx, int flag_empty) {
+    char *buffer;
+    size_t size;
+    uint8_t last = 0;
+    if(flag_empty) {
+        last = 1;
+        size = sizeof(uint8_t)*2 + sizeof(char)*32;
     }
-    return -1;
+
+    else size = sizeof(uint8_t)*2 + sizeof(char)*32 + sizeof(uint64_t)*3;
+    buffer = malloc(size);
+    char box_name[32];
+
+    memset(buffer, '\0', size);
+    memset(box_name, '\0', sizeof(char)*32);
+
+    memcpy(box_name, box.box_name, strlen(box.box_name));
+    if((idx == MAX_BOX_COUNT-1 || box_array[idx+1].box_name[0] == '\0') && !flag_empty) last = 1;
+
+    sprintf(buffer, "%d%d%s", 8, last, box_name);
+    
+    if(!flag_empty) {
+        char box_size[8];
+        char box_pub_flags[8];
+        char box_nsubs[8];
+        
+        memset(box_size, '\0', sizeof(uint64_t));
+        memset(box_pub_flags, '\0', sizeof(uint64_t));
+        memset(box_nsubs, '\0', sizeof(uint64_t));    
+        
+        sprintf(box_size, "%d", box.box_size);
+        sprintf(box_pub_flags, "%d", box.pub_flag);
+        sprintf(box_nsubs, "%d", box.n_subs);
+
+        sprintf(buffer, "%s%s%s%s", buffer, box_size, box_pub_flags, box_nsubs);
+    }
+ 
+    //printf("Buffer -> %s, should be 8%d%s%d%d%d\n", buffer, last, box.box_name, box.box_size, box.pub_flag, box.n_subs);
+    printf("Buffer -> %s\n", buffer);
+    
+    ssize_t ret = write(tx, buffer, size);
+    if(ret < 0) fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));
+
+    free(buffer);
 }
+
+void list_box(char *pipe) { 
+    int tx = open(pipe, O_WRONLY);
+
+    if (box_array[0].box_name[0] == '\0') {
+        list_answer_msg(0, box_array[0], tx, 1);
+        return;  
+    }
+    for(int i = 0; i < MAX_BOX_COUNT; i++) {
+        if(box_array[i].box_name[0] == '\0') break;
+        //printf("Name of the box -> %s\n", box_array[i].box_name);
+        list_answer_msg(i, box_array[i], tx, 0);
+    }
+    close(tx);
+} 
 
 void process_buffer_data(char *buffer) {
     //printf("Buffer -> %d\n", buffer[0]);
@@ -259,7 +322,7 @@ void process_buffer_data(char *buffer) {
     switch ((uint8_t)buffer[0])
     {
     case 1: // register publisher
-        int idx = get_box_idx(box_name);
+        int idx = find_box(box_name);
         if (idx != -1 && box_array[idx].pub_flag == 0) {
             box_array[idx].pub_flag = 1; 
             //printf("Buffer -> %s\n", pipe_name);
