@@ -58,12 +58,14 @@ size_t get_size_of_msg(char *buffer) {
     return size;
 }
 
+//. guarda o tx do subscriber e vai rodando
+
 void pub_connection(char *pipe, char *box) { 
     int rx = open(pipe, O_RDONLY);
     int idx = tfs_open(box, TFS_O_APPEND);
     if (idx == -1) { 
         fprintf(stderr, "[ERR]: box does not exist.\n");
-        pub_flag = 0;
+        box_array[idx].pub_flag = 0;
         close(rx);
         return;
     }
@@ -97,7 +99,7 @@ void pub_connection(char *pipe, char *box) {
             exit(EXIT_FAILURE);
         }
     }
-    pub_flag = 0;
+    box_array[idx].pub_flag = 0;
     close(rx);
 }
 
@@ -209,10 +211,11 @@ void remove_box(char *pipe, char *box) {
         memset(ptr, 0, sizeof(int32_t));
         memcpy(ptr2, msg, strlen(msg));
 
-        int i;
-        for(i = 0; i < MAX_BOX_COUNT; i++)
+        
+        for(int i = 0; i < MAX_BOX_COUNT; i++)
             if(strcmp(box_array[i].box_name, box) == 0) {
                 memset(box_array[i].box_name, 0, 32);
+                box_array[i].pub_flag = 0;
                 break;
             }
     
@@ -232,6 +235,18 @@ void remove_box(char *pipe, char *box) {
     close(tx);
 }
 
+void list_box(char *pipe) { 
+    printf("Work to do");
+} 
+
+int get_box_idx(char *box) { 
+    for (int i = 0; i < MAX_BOX_COUNT; i++) { 
+        if (strcmp(box_array[i].box_name, box) == 0)
+            return i;
+    }
+    return -1;
+}
+
 void process_buffer_data(char *buffer) {
     //printf("Buffer -> %d\n", buffer[0]);
     char pipe_name[256];
@@ -240,11 +255,13 @@ void process_buffer_data(char *buffer) {
     memcpy(&pipe_name, buffer+sizeof(uint8_t), sizeof(char) * 256);
     memcpy(box_name + sizeof(char), buffer+sizeof(uint8_t)+(sizeof(char) * 256), sizeof(char) * 32);
 
+
     switch ((uint8_t)buffer[0])
     {
     case 1: // register publisher
-        if (pub_flag == 0) { 
-            pub_flag = 1; 
+        int idx = get_box_idx(box_name);
+        if (idx != -1 && box_array[idx].pub_flag == 0) {
+            box_array[idx].pub_flag = 1; 
             //printf("Buffer -> %s\n", pipe_name);
             //printf("Buffer -> %s\n", box_name);
             printf("Publisher process logged: %s, %s\n", pipe_name, box_name);
@@ -264,6 +281,7 @@ void process_buffer_data(char *buffer) {
         remove_box(pipe_name, box_name);
         break;
     case 7: // list boxes
+        list_box(pipe_name);
         /* code */
         break;
     default:
@@ -336,7 +354,6 @@ int main(int argc, char **argv) {
     if (tfs_init(NULL) != 0)
         printf("[Error]: Unable to init TFS.\n");
 
-    printf("Number of args-> %d\n", argc);
     if (argc != 3) {
         printf("[Error]: mbroker <register_pipe_name> <max_sessions> \n");
         return -1;
