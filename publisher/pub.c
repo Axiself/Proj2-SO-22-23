@@ -43,15 +43,12 @@ void sig_handler(int sig) {
         // to SIG_DFL (the default action associated with the signal).
         // So we set the signal handler back to our function after each trap.
         //
-        printf("Pussy9\n"); 
         if (signal(SIGINT, sig_handler) == SIG_ERR) {
             exit(EXIT_FAILURE);
         }
-        printf("Pussy10\n"); 
     
         count++;
         exit_flag = count;
-        printf("Pussy11\n"); 
         //fprintf(stderr, "\nCaught SIGINT (%d)\n", count);
         //write(stdout, "Caught SIGINT (%d)\n", count);
         return; // Resume execution at point of interruption

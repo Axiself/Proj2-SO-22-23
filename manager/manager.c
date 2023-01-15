@@ -31,17 +31,19 @@ int man_pipe(char *pipe_name) {
     return 0;
 }
 
-void list_boxes(void *buffer) {
+void list_boxes(char *buffer) {
 
     char box_name[32];
-    memcpy(box_name, buffer+sizeof(uint8_t)*2, sizeof(char)*32);
-    uint64_t box_size = (uint64_t)(buffer+sizeof(uint8_t)*2 + sizeof(char)*32);
+    memcpy(box_name, buffer + 2, sizeof(char)*32);
 
-    uint64_t n_publishers = (uint64_t)(buffer+sizeof(uint8_t)*2 + sizeof(char)*32 + sizeof(uint64_t));
 
-    uint64_t n_subscribers = (uint64_t)(buffer+sizeof(uint8_t)*2 + sizeof(char)*32 + sizeof(uint64_t)*2);
+    //uint64_t box_size = buffer[];
 
-    printf("%s %zu %zu %zu\n", box_name, box_size, n_publishers, n_subscribers);
+    //uint64_t n_publishers = ;
+
+    //uint64_t n_subscribers = ;
+    printf("%s\n", box_name);
+    //printf("%s %zu %zu %zu\n", box_name , box_size, n_publishers, n_subscribers);
 }
 
 void answer_handler(char *pipe_name) { 
@@ -66,7 +68,7 @@ void answer_handler(char *pipe_name) {
         //fprintf(stderr, "[INFO]: received %zd B\n", ret);
         //buffer[ret] = 0;
         char *msg;
-        printf("Buffer -> %c\n", buffer[0]);
+        //printf("Buffer -> %c\n", buffer[0]);
         switch (buffer[0])
         {
         case '4':
@@ -78,9 +80,9 @@ void answer_handler(char *pipe_name) {
             }
             break;
         case '8':
-            printf("Buffer received -> %s\n", buffer);
-            printf("Last bit -> %c\n", buffer[1]);
-            printf("whats this -> %c\n", buffer[0]);
+            //printf("Buffer received -> %s\n", buffer);
+            //printf("Last bit -> %c\n", buffer[1]);
+            //printf("whats this -> %c\n", buffer[0]);
             list_boxes(buffer);
             break;
         default: //Pointless 
@@ -110,7 +112,7 @@ void man_protocol(uint8_t code, char *rpn, char *cpn, char *box) {
         memcpy(ptr, cpn, strlen(rpn));
         memcpy(ptr2, box, strlen(box));
 
-        printf("Sent -> %s\n", (char*)ptr2);
+        //printf("Sent -> %s\n", (char*)ptr2);
 
     } else {
         size = sizeof(uint8_t) + (sizeof(char) * 256);
@@ -123,7 +125,7 @@ void man_protocol(uint8_t code, char *rpn, char *cpn, char *box) {
     }  
 
     ssize_t ret = write(tx, buffer, size);
-    printf("Sent -> %s\n", (char*)buffer);
+    //printf("Sent -> %s\n", (char*)buffer);
     //printf("Sent -> %s\n", (char*)ptr);
     if (ret < 0) {
         fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));

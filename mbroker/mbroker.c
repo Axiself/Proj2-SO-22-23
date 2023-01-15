@@ -25,8 +25,16 @@ typedef struct {
     int pub_flag;
     int box_size;
     char box_name[32];
+    char message[1024];
 } Box;
 
+/*
+typedef struct {
+    char box_name[32];
+    char pipe_name[256];
+} Subscriber;
+*/
+//Subscriber *sub_array;
 Box box_array[MAX_BOX_COUNT];
 
 //> temp flags
@@ -53,7 +61,7 @@ size_t get_size_of_msg(char *buffer) {
     for (int i = 0; i < strlen(buffer); i++) { 
         if (buffer[i] == '\0')
             break;
-        printf("Char at [%d] -> %c\n", i, buffer[i]);
+        //printf("Char at [%d] -> %c\n", i, buffer[i]);
         size++;
     }
 
@@ -74,7 +82,6 @@ void pub_connection(char *pipe, char *box) {
     int idx = tfs_open(box, TFS_O_APPEND);
     if (idx == -1) { 
         fprintf(stderr, "[ERR]: box does not exist.\n");
-        tfs_close(idx);
         close(rx);
         return;
     }
@@ -94,7 +101,7 @@ void pub_connection(char *pipe, char *box) {
             //buffer[ret] = 0;
             if (msg[0] != '\0'){
                 printf("Written -> %ld\n", tfs_write(idx, msg, size));
-                printf("Message sent = %s\n", msg);
+                //printf("Message sent = %s\n", msg);
             }
             memset(msg, '\0', sizeof(msg));
         }        
@@ -114,8 +121,20 @@ void pub_connection(char *pipe, char *box) {
     close(rx);
 }
 
+/*
+void add_sub_array(char *pipe char *box_name) { 
+    for (int i = 0; i < sizeof(sub_array); i++) { 
+        if (sub_array->pipe_name[0] != '\0') { 
+            strcpy(sub_array[i].pipe_name, pipe);
+            strcpy(sub_array[i].box_name, box_name);
+        }
+    }
+}
+*/
+
 void sub_connection(char *pipe, char *box) {
     int tx = open(pipe, O_WRONLY);
+    
     int idx = tfs_open(box, TFS_O_APPEND);
     if (idx == -1) { 
         fprintf(stderr, "[ERR]: box does not exist.\n");
@@ -130,32 +149,26 @@ void sub_connection(char *pipe, char *box) {
     int i = find_box(box);
     box_array[i].n_subs++;
     
-    while (true) {
-        
-        ssize_t read = tfs_read(idx, reader, sizeof(reader) - 1);
-        if (read > 0) {
+    ssize_t read = tfs_read(idx, reader, sizeof(reader) - 1);
+    if (read > 0) {
 
-            printf("Elements read -> %ld\n", read);
-            memset(buffer, '\0', BUFFER_MSG_SIZE);
-            memset(buffer, (uint8_t)10, sizeof(uint8_t));
-            memcpy(ptr, reader, sizeof(reader) - 1);
-            printf("Buffer sent -> %s", (char*)buffer);
-            ssize_t ret = write(tx, buffer, BUFFER_MSG_SIZE);
-            if (ret == -1 && errno == EPIPE) { 
-                fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));
-                break;
-            }
-            else if (ret == 0) {
-                // ret == 0 indicates EOF
-                fprintf(stderr, "[INFO]: pipe closed\n");
-                i = find_box(box);
-                box_array[i].n_subs--;
-                tfs_close(idx);
-                break;
-            }
+        memset(buffer, '\0', BUFFER_MSG_SIZE);
+        memset(buffer, (uint8_t)10, sizeof(uint8_t));
+        memcpy(ptr, reader, sizeof(reader) - 1);
+        ssize_t ret = write(tx, buffer, BUFFER_MSG_SIZE);
+        if (ret == -1 && errno == EPIPE) { 
+            fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));
         }
-        
+        else if (ret == 0) {
+            // ret == 0 indicates EOF
+            fprintf(stderr, "[INFO]: pipe closed\n");
+            i = find_box(box);
+            box_array[i].n_subs--;
+            tfs_close(idx);
+        }
     }
+    //add_sub_array(pipe, box_array[i].box_name);
+    
     tfs_close(idx);
     free(buffer);
     close(tx);
@@ -287,7 +300,7 @@ void list_answer_msg(int idx, Box box, int tx, int flag_empty) {
     }
  
     //printf("Buffer -> %s, should be 8%d%s%d%d%d\n", buffer, last, box.box_name, box.box_size, box.pub_flag, box.n_subs);
-    printf("Buffer -> %s\n", buffer);
+    //printf("Buffer -> %s\n", buffer);
     
     ssize_t ret = write(tx, buffer, size);
     if(ret < 0) fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));
@@ -356,6 +369,8 @@ void process_buffer_data(char *buffer) {
 
 void mbroker(char * register_name, size_t size) {
     
+    //sub_array = malloc(sizeof(Subscriber) * size);
+
     // Remove pipe if it does not exist
     if (unlink(register_name) != 0 && errno != ENOENT) { 
         fprintf(stderr, "[ERR]: mkfifo failed: %s\n", strerror(errno));
