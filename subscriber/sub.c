@@ -49,7 +49,7 @@ void sig_handler(int sig) {
         count++;
         fprintf(stderr, "\nCaught SIGINT (%d)\n", count);
         //write(stdout, "Caught SIGINT (%d)\n", count);
-        return; // Resume execution at point of interruption
+        exit(EXIT_FAILURE); // Resume execution at point of interruption
     }
 
     // Must be SIGQUIT - print a message and terminate the process
@@ -65,6 +65,9 @@ void msg_receiver(char *pipe_name) {
     while (true) {
         memset(buffer, 0, BUFFER_MSG_SIZE);
         ssize_t ret = read(rx, buffer, BUFFER_MSG_SIZE);
+        if (ret > 0) { 
+            printf("Buffer received -> %s", (char*) buffer);
+        }
         if (ret == -1) {
             // ret == -1 indicates error
             free(buffer);
@@ -75,7 +78,6 @@ void msg_receiver(char *pipe_name) {
         if (signal(SIGINT, sig_handler) == SIG_ERR) { 
             exit(EXIT_FAILURE);
         }
-        printf("Buffer received -> %s", (char*) buffer);
         //fprintf(stderr, "[INFO]: received %zd B\n", ret);
         //buffer[ret] = 0;
         //fputs(buffer, stdout);
